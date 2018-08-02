@@ -52,7 +52,7 @@ image_tensor, orig_img_tensor, annotation_tensor = tf.cond(is_training_placehold
 
 feed_dict_to_use = {is_training_placeholder: True}
 
-upsample_factor = 8            # 上采样时候的最后采样倍数，pool3是8倍采样（先经过两次2倍上采样）
+upsample_factor = 8            # 上采样时候的最后采样倍数改为八倍
 number_of_classes = 21         # 分类数，20种不同的物体分类，0为背景分类
 
 log_folder = os.path.join(FLAGS.output_dir, 'train')
@@ -92,14 +92,7 @@ with tf.variable_scope('vgg_16/fc8'):
                                  weights_initializer=tf.zeros_initializer,
                                  scope='conv_pool4')
     
-# 对vgg_16预训练模型中pool3的输出特征进行(1,1)卷积 
-pool3_feature = end_points['vgg_16/pool3']
-with tf.variable_scope('vgg_16/fc8'):
-    aux_logits_8s = slim.conv2d(pool3_feature, number_of_classes, [1, 1],
-                                 activation_fn=None,
-                                 weights_initializer=tf.zeros_initializer,
-                                 scope='conv_pool3')
- 
+
     
 # Perform the upsampling   上采样
 
@@ -110,9 +103,16 @@ upsampled_logits_pool5 = tf.nn.conv2d_transpose(logits, upsample_filter_tensor_x
                                           output_shape=tf.shape(aux_logits_16s),
                                           strides=[1, 2, 2, 1],
                                           padding='SAME')
-# 2、把pool4(1,1)卷积后的特征插入到上采样后的特征中，形成新的特征
+# 2、4的特征和5上采样后的特征加一起，成为新的4
 upsampled_logits_pool4 = upsampled_logits_pool5 + aux_logits_16s
 
+# 对vgg_16预训练模型中pool3的输出特征进行(1,1)卷积 
+pool3_feature = end_points['vgg_16/pool3']
+with tf.variable_scope('vgg_16/fc8'):
+    aux_logits_8s = slim.conv2d(pool3_feature, number_of_classes, [1, 1],
+                                 activation_fn=None,
+                                 weights_initializer=tf.zeros_initializer,
+                                 scope='conv_pool3')
 
 # 3、对新特征upsampled_logits_pool4进行2x上采样
 upsample_filter_np_x2 = bilinear_upsample_weights(2, number_of_classes)        
@@ -121,7 +121,7 @@ upsampled_logits_pool4 = tf.nn.conv2d_transpose(upsampled_logits_pool4, upsample
                                           output_shape=tf.shape(aux_logits_8s),
                                           strides=[1, 2, 2, 1],
                                           padding='SAME')
-# 4、把pool3(1,1)卷积后的特征插入到上采样后的特征中，形成新的特征
+# 4、3的特征和4上采样后的特征加一起，成为新的3
 upsampled_logits = upsampled_logits_pool4 + aux_logits_8s
 
 
